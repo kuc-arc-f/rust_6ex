@@ -55,3 +55,7 @@ list
 * quit: Esc key , q
 
 ***
+### blog
+
+https://zenn.dev/knaka0209/scraps/e513b2556056f5
+
