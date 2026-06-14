@@ -12,6 +12,13 @@ Rust C++ , Ratatui example , TODO SQLite
 * LLVM CLang
 
 ***
+## image
+
+* TODO APP
+
+![img1](/images/rs_sqlite_1.png)
+
+***
 * LIB add
 ```
 sudo apt-get install libsqlite3-dev
