@@ -23,7 +23,7 @@ https://github.com/kuc-arc-f/rust_cpp1/tree/main/rs_rag_1
 ***
 ## image
 
-* TODO APP
+* RAG Search
 
 ![img1](/images/rata_rag_1.png)
 
