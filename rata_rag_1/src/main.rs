@@ -18,9 +18,6 @@ extern "C" {
     fn rag_add() -> *mut c_char;
     fn rag_search(input: *const c_char) -> *mut c_char;
 
-    //fn todo_add(input: *const c_char) -> *mut c_char;
-    //fn todo_list() -> *mut c_char;
-
     // 文字列処理（受信→加工→返却）
     fn process_string(input: *const c_char) -> *mut c_char;    
 }
@@ -45,6 +42,12 @@ struct App {
     input_mode: InputMode,
     /// History of recorded messages
     messages: Vec<String>,
+    /// Whether the app is currently loading
+    is_loading: bool,
+    /// The time when loading started
+    loading_start: Option<std::time::Instant>,
+
+    query: String,
 }
 
 enum InputMode {
@@ -56,9 +59,13 @@ impl App {
     const fn new() -> Self {
         Self {
             input: String::new(),
-            input_mode: InputMode::Normal,
+            //input_mode: InputMode::Normal,
+            input_mode: InputMode::Editing,
             messages: Vec::new(),
             character_index: 0,
+            is_loading: false,
+            loading_start: None, 
+            query: String::new(),            
         }
     }
 
@@ -121,9 +128,20 @@ impl App {
     }
 
     fn submit_message(&mut self) {
+        self.messages = vec![]; 
+        self.query = self.input.clone();
+        self.input.clear();
+        self.reset_cursor();        
+        self.is_loading = true;
+        self.loading_start = Some(std::time::Instant::now()); 
+    }
+    fn search_proc(&mut self) {
         unsafe {
-            let mut input_buff = self.input.clone();
             self.messages = vec![]; 
+            let mut input_buff = self.query.clone();
+            if input_buff.len() == 0 {
+                return;
+            }
             let c_input = CString::new(input_buff.clone()).unwrap();
             let result_ptr = rag_search(c_input.as_ptr());
             if !result_ptr.is_null() {
@@ -143,10 +161,6 @@ impl App {
 
                 free_string(result_ptr);
             }                
-            /*
-            self.input.clear();
-            self.reset_cursor();
-            */
         }
     }
 
@@ -154,27 +168,35 @@ impl App {
         loop {
             terminal.draw(|frame| self.render(frame))?;
 
-            if let Some(key) = event::read()?.as_key_press_event() {
-                match self.input_mode {
-                    InputMode::Normal => match key.code {
-                        KeyCode::Char('e') => {
-                            self.input_mode = InputMode::Editing;
-                        }
-                        KeyCode::Char('q') => {
-                            return Ok(());
-                        }
-                        _ => {}
-                    },
-                    InputMode::Editing if key.kind == KeyEventKind::Press => match key.code {
-                        KeyCode::Enter => self.submit_message(),
-                        KeyCode::Char(to_insert) => self.enter_char(to_insert),
-                        KeyCode::Backspace => self.delete_char(),
-                        KeyCode::Left => self.move_cursor_left(),
-                        KeyCode::Right => self.move_cursor_right(),
-                        KeyCode::Esc => self.input_mode = InputMode::Normal,
-                        _ => {}
-                    },
-                    InputMode::Editing => {}
+            if self.is_loading {
+                self.search_proc();
+                self.is_loading = false;
+                self.loading_start = None;
+            }
+
+            if event::poll(std::time::Duration::from_millis(100))? {
+                if let Some(key) = event::read()?.as_key_press_event() {
+                    match self.input_mode {
+                        InputMode::Normal => match key.code {
+                            KeyCode::Char('e') => {
+                                self.input_mode = InputMode::Editing;                                
+                            }
+                            KeyCode::Char('q') => {
+                                return Ok(());
+                            }
+                            _ => {}
+                        },
+                        InputMode::Editing if key.kind == KeyEventKind::Press => match key.code {
+                            KeyCode::Enter => self.submit_message(),
+                            KeyCode::Char(to_insert) => self.enter_char(to_insert),
+                            KeyCode::Backspace => self.delete_char(),
+                            KeyCode::Left => self.move_cursor_left(),
+                            KeyCode::Right => self.move_cursor_right(),
+                            KeyCode::Esc => self.input_mode = InputMode::Normal,
+                            _ => {}
+                        },
+                        InputMode::Editing => {}
+                    }
                 }
             }
         }
@@ -214,7 +236,12 @@ impl App {
         let help_message = Paragraph::new(text);
         frame.render_widget(help_message, help_area);
 
-        let input = Paragraph::new(self.input.as_str())
+        let input_text = if self.is_loading {
+            "Now Search , please wait ..."
+        } else {
+            self.input.as_str()
+        };        
+        let input = Paragraph::new(input_text)
             .style(match self.input_mode {
                 InputMode::Normal => Style::default(),
                 InputMode::Editing => Style::default().fg(Color::Yellow),
@@ -228,13 +255,17 @@ impl App {
             // Make the cursor visible and ask ratatui to put it at the specified coordinates after
             // rendering
             #[expect(clippy::cast_possible_truncation)]
-            InputMode::Editing => frame.set_cursor_position(Position::new(
-                // Draw the cursor at the current position in the input field.
-                // This position can be controlled via the left and right arrow key
-                input_area.x + self.character_index as u16 + 1,
-                // Move one line down, from the border to the input line
-                input_area.y + 1,
-            )),
+            InputMode::Editing => {
+                if !self.is_loading {
+                    frame.set_cursor_position(Position::new(
+                        // Draw the cursor at the current position in the input field.
+                        // This position can be controlled via the left and right arrow key
+                        input_area.x + self.character_index as u16 + 1,
+                        // Move one line down, from the border to the input line
+                        input_area.y + 1,
+                    ));
+                }
+            }
         }
 
         let messages: Vec<ListItem> = self
