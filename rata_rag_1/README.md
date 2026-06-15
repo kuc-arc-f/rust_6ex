@@ -21,6 +21,14 @@ Rust C++ , Ratatui RAG, SQLite
 https://github.com/kuc-arc-f/rust_cpp1/tree/main/rs_rag_1
 
 ***
+## image
+
+* TODO APP
+
+![img1](/images/rata_rag_1.png)
+
+
+***
 * llama-server start
 * port 8090: gemma-4-E2B
 
