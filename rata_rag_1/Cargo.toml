@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+chrono = { version = "0.4", features = ["unstable-locales"] }
 color-eyre = "0.6.3"
 crossterm = "0.29.0"
 ratatui = "0.30.0"
