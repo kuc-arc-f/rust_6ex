@@ -70,7 +70,7 @@ cargo run
 
 ***
 * UI operate
-* edit mode: e key
+* edit mode: i key
 * quit: Esc key , q
 
 ***
