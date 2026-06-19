@@ -74,3 +74,8 @@ cargo run
 * quit: Esc key , q
 
 ***
+### blog
+
+https://zenn.dev/knaka0209/scraps/a3c378bee01295
+
+
