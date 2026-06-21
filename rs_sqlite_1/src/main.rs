@@ -132,6 +132,7 @@ impl App {
     }
 
     fn submit_message(&mut self) {
+        let line_str = "-------------------------------------------------------------------------------------------------------------------------------------------------------------".to_string();        
         self.follow_messages = true;
         unsafe {
             let mut input_buff = self.input.clone();
@@ -179,10 +180,10 @@ impl App {
                     let items: Vec<Item> = serde_json::from_str(&resp).unwrap();
                     for item in items {
                         let row_str: String = item.id.to_string();
-                        let s3 = format!("id={} , {}", row_str, item.title);
+                        let s3 = format!("id= {} , {}", row_str, item.title);
                         self.messages.push(s3);
+                        self.messages.push(line_str.clone());
                     }
-                    //self.messages.push(resp);
                     self.input.clear();
                     self.reset_cursor();
 
