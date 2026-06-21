@@ -8,7 +8,7 @@ use crossterm::event::{self, KeyCode, KeyEventKind};
 use ratatui::layout::{Constraint, Layout, Position};
 use ratatui::style::{Color, Modifier, Style, Stylize};
 use ratatui::text::{Line, Span, Text};
-use ratatui::widgets::{Block, List, ListItem, Paragraph};
+use ratatui::widgets::{Block, Paragraph};
 use ratatui::{DefaultTerminal, Frame};
 use serde::Deserialize;
 
@@ -44,6 +44,14 @@ struct App {
     input_mode: InputMode,
     /// History of recorded messages
     messages: Vec<String>,
+    /// Vertical scroll offset for the messages pane
+    messages_scroll: u16,
+    /// Keep the messages pane pinned to the latest message
+    follow_messages: bool,    
+    /// Whether the app is currently loading
+    is_loading: bool,
+    /// The time when loading started
+    loading_start: Option<std::time::Instant>,    
 }
 
 enum InputMode {
@@ -57,7 +65,11 @@ impl App {
             input: String::new(),
             input_mode: InputMode::Normal,
             messages: Vec::new(),
+            messages_scroll: 0,
+            follow_messages: true,            
             character_index: 0,
+            is_loading: false,
+            loading_start: None,            
         }
     }
 
@@ -120,6 +132,7 @@ impl App {
     }
 
     fn submit_message(&mut self) {
+        self.follow_messages = true;
         unsafe {
             let mut input_buff = self.input.clone();
             let bool_add = input_buff.starts_with("add");
@@ -180,35 +193,63 @@ impl App {
             }
 
         }
+        self.is_loading = true;
+        self.loading_start = Some(std::time::Instant::now());
+    }
+
+    fn scroll_messages_up(&mut self) {
+        self.follow_messages = false;
+        self.messages_scroll = self.messages_scroll.saturating_sub(1);
+    }
+
+    fn scroll_messages_down(&mut self) {
+        self.follow_messages = false;
+        self.messages_scroll = self.messages_scroll.saturating_add(1);
     }
 
     fn run(mut self, terminal: &mut DefaultTerminal) -> Result<()> {
         loop {
             terminal.draw(|frame| self.render(frame))?;
 
-            if let Some(key) = event::read()?.as_key_press_event() {
-                match self.input_mode {
-                    InputMode::Normal => match key.code {
-                        KeyCode::Char('e') => {
-                            self.input_mode = InputMode::Editing;
-                        }
-                        KeyCode::Char('q') => {
-                            return Ok(());
-                        }
-                        _ => {}
-                    },
-                    InputMode::Editing if key.kind == KeyEventKind::Press => match key.code {
-                        KeyCode::Enter => self.submit_message(),
-                        KeyCode::Char(to_insert) => self.enter_char(to_insert),
-                        KeyCode::Backspace => self.delete_char(),
-                        KeyCode::Left => self.move_cursor_left(),
-                        KeyCode::Right => self.move_cursor_right(),
-                        KeyCode::Esc => self.input_mode = InputMode::Normal,
-                        _ => {}
-                    },
-                    InputMode::Editing => {}
+            if self.is_loading {
+                if let Some(start) = self.loading_start {
+                    if start.elapsed() >= std::time::Duration::from_secs(1) {
+                        self.is_loading = false;
+                        self.loading_start = None;
+                    }
                 }
             }
+
+            if event::poll(std::time::Duration::from_millis(100))? {
+                if let Some(key) = event::read()?.as_key_press_event() {
+                    match self.input_mode {
+                        InputMode::Normal => match key.code {
+                            KeyCode::Char('e') => {
+                                self.input_mode = InputMode::Editing;
+                            }
+                            KeyCode::Up => self.scroll_messages_up(),
+                            KeyCode::Down => self.scroll_messages_down(),
+                            KeyCode::Char('q') => {
+                                return Ok(());
+                            }
+                            _ => {}
+                        },
+                        InputMode::Editing if key.kind == KeyEventKind::Press => match key.code {
+                            KeyCode::Enter => self.submit_message(),
+                            KeyCode::Char(to_insert) => self.enter_char(to_insert),
+                            KeyCode::Backspace => self.delete_char(),
+                            KeyCode::Left => self.move_cursor_left(),
+                            KeyCode::Right => self.move_cursor_right(),
+                            KeyCode::Up => self.scroll_messages_up(),
+                            KeyCode::Down => self.scroll_messages_down(),
+                            KeyCode::Esc => self.input_mode = InputMode::Normal,
+                            _ => {}
+                        },
+                        InputMode::Editing => {}
+                    }
+                }
+            }
+
         }
     }
 
@@ -228,6 +269,8 @@ impl App {
                     " to exit, ".into(),
                     "e".bold(),
                     " to start editing.".bold(),
+                    "Up/Down".bold(),
+                    " to scroll messages.".into(),
                 ],
                 Style::default().add_modifier(Modifier::RAPID_BLINK),
             ),
@@ -238,6 +281,8 @@ impl App {
                     " to stop editing, ".into(),
                     "Enter".bold(),
                     " to record the message".into(),
+                    "Up/Down".bold(),
+                    " to scroll messages.".into(),                    
                 ],
                 Style::default(),
             ),
@@ -246,12 +291,19 @@ impl App {
         let help_message = Paragraph::new(text);
         frame.render_widget(help_message, help_area);
 
-        let input = Paragraph::new(self.input.as_str())
+        let input_text = if self.is_loading {
+            "Please wait..."
+        } else {
+            self.input.as_str()
+        };
+
+        let input = Paragraph::new(input_text)
             .style(match self.input_mode {
                 InputMode::Normal => Style::default(),
                 InputMode::Editing => Style::default().fg(Color::Yellow),
             })
             .block(Block::bordered().title("Input"));
+
         frame.render_widget(input, input_area);
         match self.input_mode {
             // Hide the cursor. `Frame` does this by default, so we don't need to do anything here
@@ -260,25 +312,36 @@ impl App {
             // Make the cursor visible and ask ratatui to put it at the specified coordinates after
             // rendering
             #[expect(clippy::cast_possible_truncation)]
-            InputMode::Editing => frame.set_cursor_position(Position::new(
-                // Draw the cursor at the current position in the input field.
-                // This position can be controlled via the left and right arrow key
-                input_area.x + self.character_index as u16 + 1,
-                // Move one line down, from the border to the input line
-                input_area.y + 1,
-            )),
+            InputMode::Editing => {
+                if !self.is_loading {
+                    frame.set_cursor_position(Position::new(
+                        // Draw the cursor at the current position in the input field.
+                        // This position can be controlled via the left and right arrow key
+                        input_area.x + self.character_index as u16 + 1,
+                        // Move one line down, from the border to the input line
+                        input_area.y + 1,
+                    ));
+                }
+            }
         }
-
-        let messages: Vec<ListItem> = self
+        let message_lines: Vec<Line> = self
             .messages
             .iter()
             .enumerate()
-            .map(|(i, m)| {
-                let content = Line::from(Span::raw(format!("{m}")));
-                ListItem::new(content)
-            })
+            .map(|(i, m)| Line::from(Span::raw(format!("{i}: {m}"))))
             .collect();
-        let messages = List::new(messages).block(Block::bordered().title("Messages"));
+        let viewport_height = messages_area.height.saturating_sub(2);
+        let max_scroll = message_lines
+            .len()
+            .saturating_sub(usize::from(viewport_height)) as u16;
+        let scroll = if self.follow_messages {
+            max_scroll
+        } else {
+            self.messages_scroll.min(max_scroll)
+        };
+        let messages = Paragraph::new(Text::from(message_lines))
+            .scroll((scroll, 0))
+            .block(Block::bordered().title("Messages"));
         frame.render_widget(messages, messages_area);
     }
 }
