@@ -16,7 +16,7 @@ Rust C++ , Ratatui example , TODO SQLite
 
 * TODO APP
 
-![img1](/images/rs_sqlite_1.png)
+![img1](/images/rs_sqlite_1_2.png)
 
 ***
 * LIB add
@@ -48,6 +48,11 @@ add hello
 * list
 ```
 list
+```
+
+* del
+```
+del 1
 ```
 
 ***

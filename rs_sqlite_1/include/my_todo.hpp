@@ -39,6 +39,7 @@ private:
         try{
             MyDb db_helper(DB_PATH);
             auto todos = db_helper.list("all");
+            //db_helper.print_table(todos);
             ret = db_helper.list_json(todos);
             return ret;
         } catch (const std::exception& e) {

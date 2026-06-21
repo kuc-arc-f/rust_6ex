@@ -32,6 +32,7 @@ fn main() -> Result<()> {
 struct Item {
     id: i32,
     title: String,
+    created_at: String,
 }
 
 /// App holds the state of the application
@@ -138,6 +139,7 @@ impl App {
             let mut input_buff = self.input.clone();
             let bool_add = input_buff.starts_with("add");
             let bool_list = input_buff.starts_with("list");
+            let bool_del = input_buff.starts_with("del ");
             //println!("add={}", input_buff.starts_with("add"));
             //println!("list={}", input_buff.starts_with("list"));
             if bool_add == true {
@@ -157,17 +159,33 @@ impl App {
                     let items: Vec<Item> = serde_json::from_str(&resp).unwrap();
                     for item in items {
                         let row_str: String = item.id.to_string();
-                        let s3 = format!("id={} , {}", row_str, item.title);
+                        let s3 = format!("id={} , {} {}", row_str, item.title, item.created_at);
                         self.messages.push(s3);
                     }
                     */
-                    self.messages.push(resp);
+                    self.messages.push(resp.clone());
                     self.input.clear();
                     self.reset_cursor();
 
                     free_string(result_ptr);
                 }
             } 
+            if bool_del == true {
+                self.messages = vec![]; 
+                // 削除に成功した場合は Some(削除後) を返す
+                if let Some(stripped) = input_buff.strip_prefix("del ") {
+                    input_buff = stripped.to_string();
+                }          
+                let num1: i32 = input_buff.parse().unwrap();
+                let resp: i32 = todo_delete(num1);
+                if resp == 1 {
+                    self.messages.push("OK".to_string());
+                }else{
+                    self.messages.push("".to_string());
+                }
+                self.input.clear();
+                self.reset_cursor();
+            }
             if bool_list == true {
                 self.messages = vec![]; 
                 let c_input = self.input.clone();
@@ -176,11 +194,12 @@ impl App {
                     let result_cstr = CStr::from_ptr(result_ptr);
                     let result_str = result_cstr.to_str().unwrap();
                     let resp = result_str.to_string();
+                    //self.messages.push(resp);
                     // JSON → Vec<Item>
                     let items: Vec<Item> = serde_json::from_str(&resp).unwrap();
                     for item in items {
                         let row_str: String = item.id.to_string();
-                        let s3 = format!("id= {} , {}", row_str, item.title);
+                        let s3 = format!("id= {} , {} {}", row_str, item.title, item.created_at);
                         self.messages.push(s3);
                         self.messages.push(line_str.clone());
                     }

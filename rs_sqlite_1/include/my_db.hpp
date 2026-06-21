@@ -115,8 +115,8 @@ public:
         step_and_finalize(s);
         if (sqlite3_changes(db_) == 0)
             std::cout << "ID " << id << " が見つかりません。\n";
-        else
-            std::cout << "✓ 削除しました: ID " << id << "\n";
+        //else
+        //    std::cout << "✓ 削除しました: ID " << id << "\n";
     }
 
     void clear_done() {
@@ -158,6 +158,7 @@ public:
             Todo row;
             row.id = t.id;
             row.title = t.title;
+            row.created_at = t.created_at;
             todoItems.push_back(row);           
         }        
         json j1 = todoItems;
