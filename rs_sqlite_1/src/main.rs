@@ -328,7 +328,7 @@ impl App {
             .messages
             .iter()
             .enumerate()
-            .map(|(i, m)| Line::from(Span::raw(format!("{i}: {m}"))))
+            .map(|(i, m)| Line::from(Span::raw(format!("{m}"))))
             .collect();
         let viewport_height = messages_area.height.saturating_sub(2);
         let max_scroll = message_lines
